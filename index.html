@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Wholeness Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            /* Light background */
+            min-height: 100vh;
+        }
+
+        /* Custom font for Inner Dialogue Mode - simulating non-dominant hand writing */
+        .inner-dialogue-font {
+            font-family: monospace;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #4a5568;
+            border-left: 5px solid #6b46c1;
+            /* Purple accent */
+            padding-left: 1rem;
+        }
+
+        /* Style for the prompt itself */
+        .prompt-box {
+            background-color: #ffffff;
+            border-left: 8px solid #6b46c1;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .textarea-journal {
+            min-height: 400px;
+            resize: vertical;
+            transition: all 0.3s ease-in-out;
+        }
+
+        /* Toggle Switch Styling */
+        .toggle-switch-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .toggle-label {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-label input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #6b46c1;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Archive Modal Styles */
+        .archive-modal-content {
+            height: 90vh;
+            max-height: 90vh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .archive-entry-list {
+            overflow-y: auto;
+            max-height: 100%;
+        }
+
+        .archive-entry-detail {
+            white-space: pre-wrap;
+            /* Preserve formatting and line breaks */
+            max-height: 100%;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body class="p-4 sm:p-8">
+
+    <!-- Journal Archive Modal (Hidden by default) -->
+    <div id="archive-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 p-4 sm:p-8">
+        <div class="bg-white rounded-xl shadow-2xl mx-auto max-w-5xl archive-modal-content">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-3xl font-bold text-gray-800">Journal Archive</h2>
+                <button onclick="closeHistoryModal()"
+                    class="text-gray-500 hover:text-gray-700 p-2 rounded-full transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" class="w-7 h-7">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body: Two Columns (List and Detail) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 overflow-hidden">
+                <!-- Column 1: Entry List -->
+                <div class="lg:col-span-1 border-r lg:border-gray-200 lg:pr-6 archive-entry-list">
+                    <h3 class="text-lg font-semibold text-indigo-600 mb-4">Past Entries (<span
+                            id="entry-count">0</span>)</h3>
+                    <div id="archive-list" class="space-y-3">
+                        <p id="no-entries-message" class="text-gray-500">No past entries found in local storage.</p>
+                        <!-- List items will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Column 2: Entry Detail -->
+                <div class="lg:col-span-2 overflow-y-auto">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Entry Details: <span id="detail-date"
+                            class="text-indigo-600 font-normal">Select an Entry</span></h3>
+
+                    <div id="detail-view-content" class="space-y-4">
+                        <div id="detail-prompt-container" class="prompt-box rounded-lg">
+                            <h4 class="text-sm font-bold text-indigo-700 uppercase tracking-wider mb-1">Prompt:</h4>
+                            <p id="detail-prompt" class="text-lg text-gray-700 italic">No entry selected.</p>
+                        </div>
+
+                        <div id="detail-mode" class="text-sm font-medium text-gray-600 border-l-4 border-gray-300 pl-3">
+                            Mode: <span id="detail-mode-value" class="font-bold"></span></div>
+
+                        <h4 class="text-base font-bold text-gray-700 mt-6">Journal Content:</h4>
+                        <pre id="detail-content"
+                            class="archive-entry-detail p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-800 text-base"></pre>
+
+                        <button id="edit-entry-button" onclick="editSelectedEntry()"
+                            class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-md">
+                            Load to Edit
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Journal View -->
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <header class="text-center mb-4">
+            <h1 class="text-4xl font-extrabold text-gray-800">The Wholeness Journal</h1>
+            <p id="current-day" class="text-xl text-indigo-600 font-semibold mt-2"></p>
+            <p class="text-gray-500 mt-1">A daily prompt for shadow work and integration.</p>
+        </header>
+
+        <!-- Archive Button -->
+        <div class="text-center mb-6">
+            <button onclick="showHistoryModal()"
+                class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-lg flex items-center mx-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                    stroke="currentColor" class="w-5 h-5 mr-2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m5.23 15.021a3.375 3.375 0 0 1-3.375-3.375V9.75m1.5 8.25h2.25m-2.25 0H14.25m1.5-1.5v2.25m-1.5 0H12.75" />
+                </svg>
+                View Journal Archive
+            </button>
+        </div>
+
+        <!-- Save Status Indicator -->
+        <p id="save-status" class="text-sm text-center font-medium h-6 text-gray-400 mb-4"></p>
+
+
+        <!-- Main Content Card -->
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-100">
+
+            <!-- Prompt Display Area -->
+            <div class="prompt-box rounded-lg mb-6">
+                <h2 class="text-lg font-bold text-indigo-700 mb-2 uppercase tracking-wider">Your Daily Prompt:</h2>
+                <p id="daily-prompt" class="text-2xl font-medium text-gray-700 leading-relaxed italic">
+                    Loading your path to wholeness...
+                </p>
+            </div>
+
+            <!-- Inner Dialogue Mode Toggle -->
+            <div class="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex items-center space-x-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" class="w-6 h-6 text-indigo-600">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 18.07a1.125 1.125 0 0 1-.438.398l-5.432 2.716a.75.75 0 0 1-.94-.374 5.253 5.253 0 0 1-.22-.656 5.418 5.418 0 0 1-.167-.584.75.75 0 0 1 .129-.778l2.716-5.432a1.125 1.125 0 0 1 .398-.438L16.862 4.487ZM13.88 18.847c.563-.37.94-.95 1.057-1.58.117-.63.076-1.29-.117-1.89l-1.396 1.397c-.328.327-.577.674-.741 1.047l1.197.943Z" />
+                    </svg>
+                    <span class="text-gray-700 font-medium">Inner Dialogue Mode</span>
+                </div>
+                <div class="toggle-switch-container">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="dialogue-mode-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-500 mb-3">Journal Entry:</p>
+
+            <!-- Journal Text Area -->
+            <textarea id="journal-entry"
+                class="textarea-journal w-full p-4 border-2 border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-indigo-500 outline-none transition-all"
+                placeholder="Begin writing with your dominant hand, or switch to Inner Dialogue Mode to access your subconscious with your non-dominant hand..."></textarea>
+        </div>
+
+        <!-- Footer / Instructions -->
+        <footer class="mt-8 text-center text-sm text-gray-500 max-w-lg mx-auto p-4 rounded-xl bg-white shadow-md">
+            <p class="font-bold text-indigo-500 mb-1">Tip for Wholeness:</p>
+            <p>Lucia Capacchione's work suggests that writing/drawing with your **non-dominant hand** helps bypass the
+                conscious mind, allowing the Inner Child and deeper emotional truths to emerge. Use the toggle above to
+                activate the specialized writing mode for this practice.</p>
+        </footer>
+
+        <!-- Persistence Status Display -->
+        <footer class="mt-4 text-center text-xs text-gray-400">
+            <p>Persistence Status: <span class="font-bold text-green-600" id="persistence-status">LOCAL STORAGE</span>
+            </p>
+            <p class="text-gray-500">Your entries are saved only on this device.</p>
+        </footer>
+    </div>
+
+    <script type="module">
+        // Array of 78 General Journal Prompts for Shadow Work, Inner Child, and Emotional Integration
+        const PROMPTS = [
+            // Inner Child & Emotional Release
+            "What is the one emotion you most often try to suppress? What is its hidden message?",
+            "When you trace the feeling of **anger** in your body, where does it live, and what color is it?",
+            "Write a letter from your **Angry Child** to the source of its deepest resentment or pain.",
+            "Describe a moment from your childhood when you felt truly safe and unconditionally loved.",
+            "What three specific things does your **Vulnerable Child** need from you today?",
+            "If your Inner Child could make a contract with your Adult Self about how to live life, what would the first three promises be?",
+            "What childhood memory is your body still holding onto tension about? Let the physical sensation 'speak' its message.",
+            "Write a dialogue between your Vulnerable Child and your **Nurturing Parent**.",
+            "If your blocked emotions were a river that got dammed up, what is the 'dam' (belief/defense) that is holding them back?",
+            "Using your non-dominant hand, write a diary entry from the perspective of your 8-year-old self.",
+            "What \"put-down\" did you hear from others that your inner voice still uses against you?",
+            "How does embracing sadness and fear further the process of your self-acceptance and healing?",
+            "What is one way you can practice self-care today that nurtures your emotional self, not just your physical self?",
+            "If your **Magical Child** could make one thing happen instantly, what would it be?",
+            "Write a love letter to your Inner Child, acknowledging all the hardships it has survived.",
+            "Describe a moment where you felt an **emotional equilibrium**, balancing your head and heart, body and soul.",
+            "Write a conversation between your head (logic) and your heart (emotion) about a current life decision.",
+            "What specific bodily feeling (e.g., tension in the jaw) is talking the loudest to you today? What is it trying to tell you?",
+            "What emotional experience are you ready to allow \"to come forth and be understood\"?",
+            "What is a song, a color, or a dance move that embodies your current mood? Write about why.",
+            "What small action today can bring joy, happiness, and confidence to your life?",
+            "If your Inner Child could speak a single phrase to your Higher Power, what would it be?",
+            "What one food or pattern of eating relates to a mood or emotional state? Write a dialogue with that pattern.",
+            "What emotional truth are you seeing more objectively since starting this work?",
+            "Describe your earliest memory of feeling **fear**. How does that fear manifest in your adult life now?",
+            "Write an affirmation for your health, focusing on the drawing upon your *inner power to heal* yourself.",
+            "Detail the last time you felt a genuine sense of wonder or awe.",
+
+            // General Integration & Synthesis
+            "If you were to create a mask for your shadow self, what materials, colors, and expression would it have?",
+            "What emotion (e.g., envy, jealousy) do you most often reject or judge? Write about it from a place of **radical acceptance**.",
+            "What part of your personality you identify with (e.g., 'The Expert') are you willing to transcend to be closer to your **Essence**?",
+            "Use the non-dominant hand to write an argument *against* your biggest life goal. Then, use the dominant hand to write a rebuttal based on your core Essence.",
+            "Write about an area of your life where you can accept the **paradoxical union of opposites** (e.g., certainty and doubt existing simultaneously).",
+            "What is the deepest wisdom your 'other hand' (non-dominant perspective) is channeling for you today?",
+            "What is the specific lesson or belief about **love** that your Critical Parent inherited from your family?",
+            "How is the **'unfolding of Essence'** becoming the living process of your life? List three specific examples from the past week.",
+            "Describe a current struggle you are 'fighting.' Write a statement about how 'doing nothing about it' and just letting it be would change your experience.",
+            "What innate quality of *being* (Essence) already makes you worthy, regardless of your actions (Ego)?",
+            "In what ways are your words *not* matching your actions? What is the fear that is causing this misalignment?",
+            "Write about an experience where you truly felt the **'interconnectedness of all things.'**",
+            "Ask your **Nurturing Parent** to define the word 'worth.' How does this contrast with your **Critical Parent's** definition?",
+            "How can you intentionally bring your head and heart into **emotional equilibrium** today?",
+            "What is one area of self-criticism you can give up today to further the process of **self-acceptance and healing**?",
+            "What are three ways you 'push the envelope' of your personality to grow, and what anxiety does that stir up?",
+            "What does your **Spiritual Child** say about your ability to contact your Higher Power or find meaning?",
+            "Describe what it feels like to be **'truly present to yourself'** and not lost in your thoughts, fears, or identifications.",
+            "What is the oldest emotional wound that your Inner Child is still guarding? Write a ritual or symbolic act to finally put that wound to rest.",
+            "If you could give your younger self one piece of **wisdom** about the journey, what would it be?",
+            "What automatic *conditioned reaction* are you willing to dissolve today to experience Essence?",
+            "How is your self-judgment limiting the flow of your creativity and inner wisdom?",
+            "Write a mission statement for your **Magical Child** about the life you are meant to live.",
+
+            // New General Prompts for Deeper Work (28 total)
+            "If your Inner Critic had a name, what would it be? Write a short, non-judgmental description of this character.",
+            "What unexpressed dream or desire from five years ago is still waiting for you to honor it?",
+            "Identify one area of your life where you feel blocked. If the block could talk, what would it say it needs to dissolve?",
+            "What small boundary do you need to set today to honor your energy and well-being?",
+            "Describe a 'false self' you present to the world. What does the 'real self' underneath desperately want to do?",
+            "What part of your physical body is holding the most fear or anxiety right now? Write a dialogue with that body part.",
+            "Write about a mistake you made and reframe it as a necessary step in your growth.",
+            "What hidden belief about money or success did you absorb from your primary caregiver?",
+            "What does the concept of 'flow state' feel like in your body when you are fully absorbed in an activity?",
+            "If you could speak to the person who caused you the most pain, what would your healed, adult self say?",
+            "How do you define 'enough'? Write about what true contentment looks like to you.",
+            "What is a recurring pattern in your relationships? Use your non-dominant hand to write the pattern's origin story.",
+            "When was the last time you truly surprised yourself? What did that moment teach you about your potential?",
+            "Write a thank you note to a challenge or hardship that ultimately shaped your character.",
+            "What does 'unconditional self-acceptance' feel like, even for a moment?",
+            "If you were a mythical creature representing your inner power, what would you be, and what is your power?",
+            "What is the biggest story you tell yourself that is no longer serving your highest good?",
+            "Where do you experience the tension between who you *think* you should be and who you *actually* are?",
+            "What is one loving action you can take for yourself before the end of the day?",
+            "Write about a time you followed your intuition and it led you to a positive outcome.",
+            "What color represents your deepest sense of purpose, and why?",
+            "What belief are you holding onto that limits your ability to receive love or abundance?",
+            "Describe the feeling of being completely present, with no judgment of the moment.",
+            "What three adjectives would your authentic self use to describe your life today?",
+            "Write about the specific thing you are resisting right now. What is the fear of surrender?",
+            "What does your current level of spiritual health look like? Describe it non-judgmentally.",
+            "If your energy was fully healed and restored, what project would you immediately start?",
+            "What part of yourself do you still keep hidden from everyone? Write about it as a secret friend."
+        ];
+
+        // --- Global State & References ---
+        const saveStatusEl = document.getElementById('save-status');
+        const journalEntryElement = document.getElementById('journal-entry');
+        const dialogueModeToggle = document.getElementById('dialogue-mode-toggle');
+        const currentDayEl = document.getElementById('current-day');
+        const dailyPromptEl = document.getElementById('daily-prompt');
+        const archiveModalEl = document.getElementById('archive-modal');
+        const archiveListEl = document.getElementById('archive-list');
+        const detailDateEl = document.getElementById('detail-date');
+        const detailPromptEl = document.getElementById('detail-prompt');
+        const detailContentEl = document.getElementById('detail-content');
+        const detailModeValueEl = document.getElementById('detail-mode-value');
+        const noEntriesMessageEl = document.getElementById('no-entries-message');
+        const entryCountEl = document.getElementById('entry-count');
+
+        let currentEntryDateKey = ''; // Holds the YYYY-MM-DD key for the entry currently being viewed/edited
+
+        /**
+         * Updates the save status message on the UI.
+         */
+        const updateStatus = (message, colorClass = 'text-gray-400') =>
+        {
+            saveStatusEl.textContent = message;
+            saveStatusEl.className = `text-sm text-center font-medium h-6 mb-4 ${colorClass}`;
+        };
+
+        /**
+         * Generates a unique index based on the day of the year (1-366) and the total number of prompts.
+         */
+        const getDailyPromptIndex = () =>
+        {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), 0, 0);
+            const diff = now - start;
+            const oneDay = 1000 * 60 * 60 * 24;
+            const dayOfYear = Math.floor(diff / oneDay);
+
+            return dayOfYear % PROMPTS.length;
+        };
+
+        const getFormattedDate = (dateString) =>
+        {
+            const date = new Date(dateString.replace(/-/g, '/')); // Use replace for better cross-browser parsing of YYYY-MM-DD
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        };
+
+        /**
+         * Loads the journal entry for the specified dateKey, or today's if none is provided.
+         */
+        const loadJournalEntry = (dateKey = null) =>
+        {
+            const today = new Date().toISOString().split('T')[0];
+
+            if (!dateKey)
+            {
+                // Scenario 1: Load Today's entry (default)
+                currentEntryDateKey = today;
+                const promptIndex = getDailyPromptIndex();
+                const dailyPrompt = PROMPTS[promptIndex];
+
+                currentDayEl.textContent = getFormattedDate(today);
+                dailyPromptEl.innerHTML = dailyPrompt;
+            } else
+            {
+                // Scenario 2: Load a specific historical entry
+                currentEntryDateKey = dateKey;
+
+                // Clear the main view to show the loaded entry
+                currentDayEl.textContent = getFormattedDate(dateKey) + " (Loaded)";
+                dailyPromptEl.innerHTML = 'Viewing/Editing Past Entry';
+            }
+
+            try
+            {
+                const storedEntry = localStorage.getItem(currentEntryDateKey);
+                if (storedEntry)
+                {
+                    const data = JSON.parse(storedEntry);
+                    journalEntryElement.value = data.content || '';
+                    dialogueModeToggle.checked = !!data.isDialogueMode;
+                    toggleDialogueMode(true);
+                    updateStatus("Entry loaded.", "text-green-500");
+                    if (dateKey !== today)
+                    {
+                        // If it's a past entry, update the displayed prompt to reflect the *actual* prompt used on that day
+                        dailyPromptEl.innerHTML = `**Original Prompt:** ${data.prompt}`;
+                    }
+                } else
+                {
+                    // Only clear and show today's prompt if it's actually today
+                    if (currentEntryDateKey === today)
+                    {
+                        journalEntryElement.value = '';
+                        dialogueModeToggle.checked = false;
+                        toggleDialogueMode(true);
+                        updateStatus("Ready to write.", "text-gray-400");
+                    } else
+                    {
+                        // This case shouldn't happen if we select from the archive, but as a fallback
+                        journalEntryElement.value = `Error: No entry found for ${dateKey}.`;
+                        updateStatus("Error: Could not load requested entry.", "text-red-500");
+                    }
+                }
+            } catch (e)
+            {
+                console.error("Error loading journal entry from localStorage:", e);
+                updateStatus("Error loading entry.", "text-red-500");
+            }
+        };
+
+        /**
+         * Saves the current journal entry to localStorage (with debouncing).
+         */
+        let saveTimeout;
+        const saveJournalEntry = () =>
+        {
+            clearTimeout(saveTimeout);
+            updateStatus("Saving...", "text-yellow-600 animate-pulse");
+
+            saveTimeout = setTimeout(() =>
+            {
+                try
+                {
+                    const entryContent = journalEntryElement.value;
+                    const isDialogueMode = dialogueModeToggle.checked;
+                    const currentPrompt = dailyPromptEl.textContent.replace('**Original Prompt:** ', '').trim();
+
+                    const entryData = {
+                        date: currentEntryDateKey,
+                        prompt: currentPrompt,
+                        content: entryContent,
+                        isDialogueMode: isDialogueMode,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    localStorage.setItem(currentEntryDateKey, JSON.stringify(entryData));
+                    updateStatus(`Saved for ${getFormattedDate(currentEntryDateKey)}!`, "text-green-500");
+                } catch (error)
+                {
+                    console.error("Failed to save journal entry to localStorage:", error);
+                    updateStatus("Save Failed (Local Storage Full/Error)!", "text-red-500");
+                }
+            }, 1000); // 1-second debounce
+        };
+
+
+        /**
+         * Toggles the visual style of the journal entry area for Inner Dialogue Mode.
+         */
+        const toggleDialogueMode = (isInitial = false) =>
+        {
+            const isChecked = dialogueModeToggle.checked;
+            if (isChecked)
+            {
+                journalEntryElement.classList.add('inner-dialogue-font');
+                journalEntryElement.placeholder = "Write or Draw with your NON-DOMINANT HAND to access the Inner Child...";
+            } else
+            {
+                journalEntryElement.classList.remove('inner-dialogue-font');
+                journalEntryElement.placeholder = "Begin writing with your dominant hand...";
+            }
+        };
+
+        // --- Archive/History Functions ---
+
+        /**
+         * Collects all journal entries from localStorage.
+         * @returns {Array<Object>} Sorted array of entry data.
+         */
+        const getAllJournalEntries = () =>
+        {
+            const entries = [];
+            const todayKey = new Date().toISOString().split('T')[0];
+
+            for (let i = 0; i < localStorage.length; i++)
+            {
+                const key = localStorage.key(i);
+                // Check if the key looks like a date (YYYY-MM-DD) and isn't today
+                if (key.match(/^\d{4}-\d{2}-\d{2}$/))
+                {
+                    try
+                    {
+                        const entryData = JSON.parse(localStorage.getItem(key));
+                        // Ensure it has required properties and isn't today's (we'll load today separately)
+                        if (entryData.content && key !== todayKey)
+                        {
+                            entries.push(entryData);
+                        }
+                    } catch (e)
+                    {
+                        console.warn(`Skipping invalid localStorage item key: ${key}`);
+                    }
+                }
+            }
+
+            // Sort by date descending (most recent first)
+            entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+            return entries;
+        };
+
+        /**
+         * Opens the history modal and populates the list of entries.
+         */
+        window.showHistoryModal = () =>
+        {
+            const entries = getAllJournalEntries();
+            archiveListEl.innerHTML = '';
+
+            entryCountEl.textContent = entries.length;
+
+            if (entries.length === 0)
+            {
+                noEntriesMessageEl.classList.remove('hidden');
+                // Reset detail view
+                detailDateEl.textContent = 'Select an Entry';
+                detailPromptEl.textContent = 'No entry selected.';
+                detailContentEl.textContent = '';
+                detailModeValueEl.textContent = 'N/A';
+            } else
+            {
+                noEntriesMessageEl.classList.add('hidden');
+                entries.forEach(entry =>
+                {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'cursor-pointer p-3 bg-gray-50 hover:bg-indigo-100 rounded-lg border border-gray-200 transition-colors shadow-sm';
+                    listItem.setAttribute('data-date', entry.date);
+                    listItem.onclick = () => displayEntryDetails(entry);
+
+                    const formattedDate = getFormattedDate(entry.date).replace(/, \d{4}/, ''); // e.g., "Monday, October 13"
+                    const snippet = entry.content.substring(0, 50) + (entry.content.length > 50 ? '...' : '');
+
+                    listItem.innerHTML = `
+                        <p class="font-bold text-sm text-indigo-700">${formattedDate}</p>
+                        <p class="text-xs text-gray-600 truncate mt-1">${snippet}</p>
+                    `;
+                    archiveListEl.appendChild(listItem);
+                });
+
+                // Select the most recent entry by default
+                displayEntryDetails(entries[0]);
+            }
+
+            archiveModalEl.classList.remove('hidden');
+        };
+
+        /**
+         * Displays the full content of a selected entry in the detail pane.
+         * @param {Object} entry The parsed entry data.
+         */
+        let selectedEntryKey = '';
+        const displayEntryDetails = (entry) =>
+        {
+            // Remove active class from previous selection
+            document.querySelectorAll('#archive-list div').forEach(el =>
+            {
+                el.classList.remove('bg-indigo-200', 'border-indigo-500');
+                el.classList.add('bg-gray-50', 'border-gray-200');
+            });
+
+            // Add active class to current selection
+            const selectedListItem = document.querySelector(`[data-date="${entry.date}"]`);
+            if (selectedListItem)
+            {
+                selectedListItem.classList.remove('bg-gray-50', 'border-gray-200');
+                selectedListItem.classList.add('bg-indigo-200', 'border-indigo-500');
+            }
+
+            selectedEntryKey = entry.date;
+            detailDateEl.textContent = getFormattedDate(entry.date);
+            detailPromptEl.textContent = entry.prompt;
+            detailContentEl.textContent = entry.content; // textContent automatically handles pre-wrap
+            detailModeValueEl.textContent = entry.isDialogueMode ? 'Non-Dominant Hand (Inner Dialogue)' : 'Dominant Hand (Adult Voice)';
+        };
+
+        /**
+         * Loads the currently selected archive entry into the main journal area for editing.
+         */
+        window.editSelectedEntry = () =>
+        {
+            if (selectedEntryKey)
+            {
+                // Remove existing entry for the current day to prevent overwriting without warning
+                // Note: The main loadJournalEntry handles this by loading the old content into the editor.
+                closeHistoryModal();
+                loadJournalEntry(selectedEntryKey);
+                // Prompt user that they are editing an old entry (handled by loadJournalEntry text updates)
+                updateStatus(`Editing archived entry from ${getFormattedDate(selectedEntryKey)}. Changes will be saved to this date.`, "text-red-600");
+            }
+        };
+
+        /**
+         * Closes the history modal.
+         */
+        window.closeHistoryModal = () =>
+        {
+            archiveModalEl.classList.add('hidden');
+        };
+
+        // --- Initialization ---
+        const initApp = () =>
+        {
+            // Load today's entry on start
+            loadJournalEntry();
+
+            // Set up event listeners for auto-saving and mode toggling
+            journalEntryElement.addEventListener('input', saveJournalEntry);
+            dialogueModeToggle.addEventListener('change', () =>
+            {
+                toggleDialogueMode(false);
+                saveJournalEntry();
+            });
+        };
+
+        // Initialize the app on window load
+        window.onload = initApp;
+    </script>
+</body>
+
+</html>
